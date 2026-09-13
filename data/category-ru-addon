@@ -1,30 +1,65 @@
+# Carsharing
+
 domain:delitime.ru
 domain:citydrive.ru
 domain:belkacar.ru
+
+# Whoosh
+
 domain:whoosh-bike.ru
+
+# IP check
+
 domain:myip.ru
+
+# Litres.ru
+
 domain:litres.ru
+
+# T Plus
+
 domain:esplus.ru
+
+# Gazprom
+
 domain:gazprom.ru
 domain:gid.ru
 domain:gazprom-neft.ru
+
+# Avtodor
+
 domain:avtodor-tr.ru
+
+# Samokat
+
 domain:samokat.ru
+
+# Okko
+
 domain:okkoapi.tv
 domain:okko.ru
 domain:okko.me
 domain:okkoinfo.ru
 domain:playfamily.ru
 domain:tvgateway.ru
+domain:selcdn.net
+domain:cdnvideo.ru
+domain:cdnvideohub.com
+
+# Sberbank - additional
+
 domain:sber.ru
 domain:sbrf.ru
 domain:sberbank.ru
 domain:sberbank.com
 domain:sbcdn.ru
-domain:selcdn.net
-domain:cdnvideo.ru
-domain:cdnvideohub.com
+
+# Wifire
+
 domain:wifire.ru
+
+# CDEK
+
 domain:cdek.ru
 domain:cdek.shopping
 domain:ad-cdek.ru
