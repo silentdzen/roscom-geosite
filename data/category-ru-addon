@@ -63,3 +63,8 @@ domain:wifire.ru
 domain:cdek.ru
 domain:cdek.shopping
 domain:ad-cdek.ru
+
+# Match TV
+
+domain:matchtv.ru
+domain:sportbox.ru
