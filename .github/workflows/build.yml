@@ -1,4 +1,5 @@
 name: Build geosite
+
 on:
   workflow_dispatch:
   push:
@@ -20,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CURL: "curl -fsSL --retry 3 --retry-delay 2 --retry-connrefused"
+
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v6
@@ -57,36 +59,36 @@ jobs:
             /tmp/loyalsoldier-geosite.dat \
             ../../data
 
-      - name: Save Go dependency checksums
+      - name: Commit updated AI categories and Go dependencies
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add buildtools/import-loyalsoldier-geosite/go.sum
+          git add \
+            data/openai \
+            data/anthropic \
+            buildtools/import-loyalsoldier-geosite/go.mod \
+            buildtools/import-loyalsoldier-geosite/go.sum
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update geosite importer Go checksums"
-            git push origin HEAD:${GITHUB_REF_NAME}
+            git commit -m "Update AI geosite categories and Go dependencies"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "AI categories and Go dependencies are already up to date."
           fi
 
       - name: Set tag
         if: github.ref_name == 'master'
         run: |
-          DAILY_TAG=$(date +%Y%m%d%H%M)
-          echo "DAILY_TAG=$DAILY_TAG" >> $GITHUB_ENV
+          set -euo pipefail
 
-      - name: Create Tag
-        if: github.ref_name == 'master'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { DAILY_TAG } = process.env
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${DAILY_TAG}`,
-              sha: context.sha
-            })
+          DAILY_TAG=$(date -u +%Y%m%d%H%M)
+          echo "DAILY_TAG=$DAILY_TAG" >> "$GITHUB_ENV"
+
+          git tag "$DAILY_TAG"
+          git push origin "$DAILY_TAG"
 
       - name: Build geosite.dat
         run: |
@@ -107,12 +109,19 @@ jobs:
       - name: Install Mihomo (latest stable)
         run: |
           set -euo pipefail
+
           ARCH=$(dpkg --print-architecture)
-          LATEST_URL=$(${{ env.CURL }} https://api.github.com/repos/MetaCubeX/mihomo/releases/latest \
+
+          LATEST_URL=$(${{ env.CURL }} \
+            https://api.github.com/repos/MetaCubeX/mihomo/releases/latest \
             | grep -oP '"browser_download_url":\s*"\K[^"]*mihomo-linux-'"$ARCH"'-[^"]*\.deb(?=")' \
             | head -n1)
+
+          test -n "$LATEST_URL"
           echo "Downloading: $LATEST_URL"
+
           ${{ env.CURL }} -o /tmp/mihomo.deb "$LATEST_URL"
+
           sudo dpkg -i /tmp/mihomo.deb || sudo apt-get install -f -y
           rm -f /tmp/mihomo.deb
 
@@ -135,6 +144,7 @@ jobs:
           find "$work" -path "$out" -prune -o -type f -print0 |
           while IFS= read -r -d '' f; do
             tmp="$(mktemp)"
+
             awk '
               function trim(s){ sub(/^[ \t]+/,"",s); sub(/[ \t]+$/,"",s); return s }
               {
@@ -193,6 +203,7 @@ jobs:
             rel="${f#$work/}"
             rel_noext="${rel%.*}"
             dest="$out/${rel_noext}.mrs"
+
             mkdir -p "$(dirname "$dest")"
             mihomo convert-ruleset domain text "$tmp" "$dest"
             rm -f "$tmp"
@@ -204,6 +215,7 @@ jobs:
 
           src=/tmp/sing-box/src
           out=/tmp/sing-box/rulesets
+
           rm -rf /tmp/sing-box
           mkdir -p "$src" "$out"
           cp -a ./data/. "$src"/
@@ -211,6 +223,7 @@ jobs:
           find "$src" -type f -print0 |
           while IFS= read -r -d '' f; do
             tmp_json="$(mktemp)"
+
             awk '
               function trim(s){ sub(/^[ \t]+/,"",s); sub(/[ \t]+$/,"",s); return s }
               function strip_tail(s){
@@ -233,7 +246,9 @@ jobs:
                 if (t ~ /^keyword:/){ v=strip_tail(substr(t,9));                   if(v!="") print "keyword\t" v; next }
                 if (t ~ /^regexp:/) { v=strip_tail(substr(t,8));                   if(v!="") print "regex\t"   v; next }
 
-                v=t; sub(/^\./,"",v); if(v!="") print "keyword\t" v
+                v=t
+                sub(/^\./,"",v)
+                if(v!="") print "keyword\t" v
               }
             ' "$f" | jq -Rn '
               def add($k; $v): .rules[0][$k] = ((.rules[0][$k] // []) + [$v]);
@@ -251,6 +266,7 @@ jobs:
             rel="${f#$src/}"
             rel_noext="${rel%.*}"
             dest="$out/${rel_noext}.srs"
+
             mkdir -p "$(dirname "$dest")"
             sing-box rule-set compile --output "$dest" "$tmp_json"
             rm -f "$tmp_json"
@@ -260,34 +276,45 @@ jobs:
         if: github.ref_name == 'master'
         run: |
           set -euo pipefail
+
           rm -rf release
           mkdir -p release/mihomo release/sing-box
+
           cp ./geosite.dat release/
-          cp -a /tmp/mihomo/rulesets/.   release/mihomo/
+          cp -a /tmp/mihomo/rulesets/. release/mihomo/
           cp -a /tmp/sing-box/rulesets/. release/sing-box/
-          rm -f /tmp/mihomo.tar.gz /tmp/sing-box.tar.gz
-          tar -czf release/mihomo.tar.gz   -C release mihomo
+
+          tar -czf release/mihomo.tar.gz -C release mihomo
           tar -czf release/sing-box.tar.gz -C release sing-box
+
+          test -s release/geosite.dat
           test -s release/mihomo.tar.gz
           test -s release/sing-box.tar.gz
+
           sha256sum release/geosite.dat > release/geosite.dat.sha256
 
       - name: MASTER Push to release branch and update master
         if: github.ref_name == 'master'
         run: |
-          cd release || exit 1
+          set -euo pipefail
+
+          cd release
           git init
           git config --local user.name "silentdzen"
           git config --local user.email "silentdzen@users.noreply.github.com"
           git checkout -b release
           git add -A
           git commit -m "Release ${{ env.DAILY_TAG }}"
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+
+          git remote add origin \
+            "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+
           git push -f -u origin release
-          cd .. || exit 1
+          cd ..
+
           git config --local user.name "silentdzen"
           git config --local user.email "silentdzen@users.noreply.github.com"
-          git checkout master
+
           git add release/
           git commit -m "Release ${{ env.DAILY_TAG }}" || echo "No changes to commit"
           git push origin master
@@ -309,9 +336,13 @@ jobs:
         if: github.ref_name == 'master'
         run: |
           set -euo pipefail
-          cd release || exit 1
-          find . -type f -not -path "./.git/*" -print0 | while IFS= read -r -d '' f; do
+
+          cd release
+
+          find . -type f -not -path "./.git/*" -print0 |
+          while IFS= read -r -d '' f; do
             rel="${f#./}"
+
             ${{ env.CURL }} -i "https://purge.jsdelivr.net/gh/${{ github.repository }}/release/${rel}"
             ${{ env.CURL }} -i "https://purge.jsdelivr.net/gh/${{ github.repository }}@master/release/${rel}"
             ${{ env.CURL }} -i "https://purge.jsdelivr.net/gh/${{ github.repository }}@release/${rel}"
@@ -322,29 +353,38 @@ jobs:
         if: github.ref_name == 'test'
         run: |
           set -euo pipefail
+
           rm -rf release
           mkdir -p release/mihomo release/sing-box
+
           cp ./geosite.dat release/
-          cp -a /tmp/mihomo/rulesets/.   release/mihomo/
+          cp -a /tmp/mihomo/rulesets/. release/mihomo/
           cp -a /tmp/sing-box/rulesets/. release/sing-box/
+
           sha256sum release/geosite.dat > release/geosite.dat.sha256
 
       - name: TEST Push to test-release branch & update test branch
         if: github.ref_name == 'test'
         run: |
-          cd release || exit 1
+          set -euo pipefail
+
+          cd release
           git init
           git config --local user.name "silentdzen"
           git config --local user.email "silentdzen@users.noreply.github.com"
           git checkout -b test-release
           git add -A
           git commit -m "Test Release $(date -u +%Y%m%d%H%M)"
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+
+          git remote add origin \
+            "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+
           git push -f -u origin test-release
-          cd .. || exit 1
+          cd ..
+
           git config --local user.name "silentdzen"
           git config --local user.email "silentdzen@users.noreply.github.com"
-          git checkout -B test
+
           git add release/
           git commit -m "Test Release $(date -u +%Y%m%d%H%M)" || echo "No changes to commit"
           git push origin test
@@ -353,9 +393,13 @@ jobs:
         if: github.ref_name == 'test'
         run: |
           set -euo pipefail
-          cd release || exit 1
-          find . -type f -not -path "./.git/*" -print0 | while IFS= read -r -d '' f; do
+
+          cd release
+
+          find . -type f -not -path "./.git/*" -print0 |
+          while IFS= read -r -d '' f; do
             rel="${f#./}"
+
             ${{ env.CURL }} -i "https://purge.jsdelivr.net/gh/${{ github.repository }}@test/release/${rel}"
             ${{ env.CURL }} -i "https://purge.jsdelivr.net/gh/${{ github.repository }}@test-release/${rel}"
           done
