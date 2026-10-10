@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	router "github.com/v2fly/v2ray-core/v5/app/router/routercommon"
@@ -12,23 +13,30 @@ import (
 
 func main() {
 	if len(os.Args) != 3 {
-		panic("usage: import-loyalsoldier-geosite INPUT.dat OUTPUT_DIR")
+		fmt.Fprintln(os.Stderr, "usage: import-loyalsoldier-geosite INPUT.dat OUTPUT_DIR")
+		os.Exit(1)
 	}
 
-	data, err := os.ReadFile(os.Args[1])
+	inputPath := os.Args[1]
+	outputDir := os.Args[2]
+
+	data, err := os.ReadFile(inputPath)
 	if err != nil {
-		panic(err)
+		fail("read upstream database: %v", err)
 	}
 
 	var db router.GeoSiteList
 	if err := proto.Unmarshal(data, &db); err != nil {
-		panic(fmt.Errorf("invalid upstream geosite.dat: %w", err))
+		fail("invalid upstream geosite.dat: %v", err)
 	}
 
 	wanted := map[string]bool{
-		"OPENAI":        false,
-		"GOOGLE-GEMINI": false,
-		"ANTHROPIC":     false,
+		"OPENAI":    false,
+		"ANTHROPIC": false,
+	}
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		fail("create output directory: %v", err)
 	}
 
 	for _, site := range db.Entry {
@@ -38,6 +46,7 @@ func main() {
 		}
 
 		var lines []string
+
 		for _, d := range site.Domain {
 			switch d.Type {
 			case router.Domain_RootDomain:
@@ -52,27 +61,62 @@ func main() {
 		}
 
 		if len(lines) == 0 {
-			panic("empty upstream category: " + name)
+			fail("upstream category %s is empty", name)
 		}
 
-		if err := os.MkdirAll(os.Args[2], 0755); err != nil {
-			panic(err)
+		filename := strings.ToLower(name)
+		outPath := filepath.Join(outputDir, filename)
+
+		// Merge with existing entries so manual additions survive.
+		existing, err := os.ReadFile(outPath)
+		if err != nil && !os.IsNotExist(err) {
+			fail("read existing %s: %v", outPath, err)
+		}
+		if err == nil {
+			for _, line := range strings.Split(string(existing), "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					lines = append(lines, line)
+				}
+			}
 		}
 
-		out := filepath.Join(os.Args[2], name)
-		content := strings.Join(lines, "\n") + "\n"
+		// Deduplicate and sort entries.
+		seen := make(map[string]struct{}, len(lines))
+		merged := make([]string, 0, len(lines))
 
-		if err := os.WriteFile(out, []byte(content), 0644); err != nil {
-			panic(err)
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			if _, exists := seen[line]; exists {
+				continue
+			}
+			seen[line] = struct{}{}
+			merged = append(merged, line)
+		}
+
+		sort.Strings(merged)
+
+		content := strings.Join(merged, "\n") + "\n"
+		if err := os.WriteFile(outPath, []byte(content), 0644); err != nil {
+			fail("write %s: %v", outPath, err)
 		}
 
 		wanted[name] = true
-		fmt.Printf("%s: %d entries\n", name, len(lines))
+		fmt.Printf("%s: %d entries written to %s\n",
+			filename, len(merged), outPath)
 	}
 
 	for name, found := range wanted {
 		if !found {
-			panic("category missing from upstream database: " + name)
+			fail("category %s is missing from upstream geosite.dat", name)
 		}
 	}
+}
+
+func fail(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "ERROR: "+format+"\n", args...)
+	os.Exit(1)
 }
