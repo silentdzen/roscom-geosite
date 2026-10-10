@@ -73,7 +73,7 @@ jobs:
             buildtools/import-loyalsoldier-geosite/go.sum
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update AI geosite categories and Go dependencies"
+            git commit -m "Update geosite files"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           else
             echo "AI categories and Go dependencies are already up to date."
