@@ -40,6 +40,22 @@ jobs:
           cache: true
           cache-dependency-path: community/go.sum
 
+      - name: Import AI categories from Loyalsoldier
+        run: |
+          set -euo pipefail
+
+          ${{ env.CURL }} \
+            https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat \
+            -o /tmp/loyalsoldier-geosite.dat
+
+          test -s /tmp/loyalsoldier-geosite.dat
+
+          cd buildtools/import-loyalsoldier-geosite
+          go mod tidy
+          go run . \
+            /tmp/loyalsoldier-geosite.dat \
+            ../../data
+
       - name: Set tag
         if: github.ref_name == 'master'
         run: |
