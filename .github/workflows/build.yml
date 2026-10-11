@@ -59,6 +59,23 @@ jobs:
             /tmp/loyalsoldier-geosite.dat \
             ../../data
 
+      - name: Import ru-available-only-inside from RunetFreedom
+        run: | 
+          set -euo pipefail
+
+          ${{ env.CURL }}
+            https://raw.githubusercontent.com/runetfreedom/russia-blocked-geosite/release/geosite.dat
+            -o /tmp/runetfreedom-geosite.dat
+
+          test -s /tmp/runetfreedom-geosite.dat
+
+          cd buildtools/import-runetfreedom-geosite
+
+          go mod tidy
+          go run . \
+            /tmp/runetfreedom-geosite.dat \
+            ../../data
+
       - name: Commit updated AI categories and Go dependencies
         run: |
           set -euo pipefail
@@ -69,8 +86,11 @@ jobs:
           git add \
             data/openai \
             data/anthropic \
+            data/ru-available-only-inside \
             buildtools/import-loyalsoldier-geosite/go.mod \
-            buildtools/import-loyalsoldier-geosite/go.sum
+            buildtools/import-loyalsoldier-geosite/go.sum \
+            buildtools/import-runetfreedom-geosite/go.mod \
+            buildtools/import-runetfreedom-geosite/go.sum
 
           if ! git diff --cached --quiet; then
             git commit -m "Update geosite files"
