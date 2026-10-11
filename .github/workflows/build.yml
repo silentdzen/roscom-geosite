@@ -72,8 +72,8 @@ jobs:
           cd buildtools/import-runetfreedom-geosite
 
           go mod tidy
-          go run . \
-            /tmp/runetfreedom-geosite.dat \
+          go run .
+            /tmp/runetfreedom-geosite.dat
             ../../data
 
       - name: Commit updated AI categories and Go dependencies
