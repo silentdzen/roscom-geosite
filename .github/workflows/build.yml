@@ -63,8 +63,8 @@ jobs:
         run: | 
           set -euo pipefail
 
-          ${{ env.CURL }}
-            https://raw.githubusercontent.com/runetfreedom/russia-blocked-geosite/release/geosite.dat
+          ${{ env.CURL }} \
+            https://raw.githubusercontent.com/runetfreedom/russia-blocked-geosite/release/geosite.dat \
             -o /tmp/runetfreedom-geosite.dat
 
           test -s /tmp/runetfreedom-geosite.dat
@@ -72,8 +72,8 @@ jobs:
           cd buildtools/import-runetfreedom-geosite
 
           go mod tidy
-          go run .
-            /tmp/runetfreedom-geosite.dat
+          go run . \
+            /tmp/runetfreedom-geosite.dat \
             ../../data
 
       - name: Commit updated AI categories and Go dependencies
